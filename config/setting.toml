@@ -8,7 +8,7 @@ labs_base_url = "https://labs.google/fx/api"
 api_base_url = "https://aisandbox-pa.googleapis.com/v1"
 timeout = 120
 poll_interval = 3.0
-max_poll_attempts = 200
+max_poll_attempts = 300
 
 [server]
 host = "0.0.0.0"

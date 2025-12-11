@@ -548,7 +548,7 @@ class FlowClient:
         Returns:
             同 generate_video_text
         """
-        url = f"{self.api_base_url}/video:batchAsyncGenerateVideoStartAndEndImage"
+        url = f"{self.api_base_url}/video:batchAsyncGenerateVideoStartImage"
 
         scene_id = str(uuid.uuid4())
 
