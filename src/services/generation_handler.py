@@ -52,20 +52,20 @@ MODEL_CONFIG = {
     # 不支持上传图片，只使用文本提示词生成
 
     # veo_3_1_t2v_fast_portrait (竖屏)
-    # 上游模型名: veo_3_1_t2v_fast_portrait
+    # 上游模型名: veo_3_1_t2v_fast_portrait_ultra
     "veo_3_1_t2v_fast_portrait": {
         "type": "video",
         "video_type": "t2v",
-        "model_key": "veo_3_1_t2v_fast_portrait",
+        "model_key": "veo_3_1_t2v_fast_portrait_ultra",
         "aspect_ratio": "VIDEO_ASPECT_RATIO_PORTRAIT",
         "supports_images": False
     },
     # veo_3_1_t2v_fast_landscape (横屏)
-    # 上游模型名: veo_3_1_t2v_fast
+    # 上游模型名: veo_3_1_t2v_fast_ultra
     "veo_3_1_t2v_fast_landscape": {
         "type": "video",
         "video_type": "t2v",
-        "model_key": "veo_3_1_t2v_fast",
+        "model_key": "veo_3_1_t2v_fast_ultra",
         "aspect_ratio": "VIDEO_ASPECT_RATIO_LANDSCAPE",
         "supports_images": False
     },
@@ -105,11 +105,11 @@ MODEL_CONFIG = {
     # ========== 首尾帧模型 (I2V - Image to Video) ==========
     # 支持1-2张图片：1张作为首帧，2张作为首尾帧
 
-    # veo_3_1_i2v_s_fast_fl (需要新增横竖屏)
+    # veo_3_1_i2v_s_fast_ultra (图生视频)
     "veo_3_1_i2v_s_fast_fl_portrait": {
         "type": "video",
         "video_type": "i2v",
-        "model_key": "veo_3_1_i2v_s_fast_fl",
+        "model_key": "veo_3_1_i2v_s_fast_ultra",
         "aspect_ratio": "VIDEO_ASPECT_RATIO_PORTRAIT",
         "supports_images": True,
         "min_images": 1,
@@ -118,7 +118,7 @@ MODEL_CONFIG = {
     "veo_3_1_i2v_s_fast_fl_landscape": {
         "type": "video",
         "video_type": "i2v",
-        "model_key": "veo_3_1_i2v_s_fast_fl",
+        "model_key": "veo_3_1_i2v_s_fast_ultra",
         "aspect_ratio": "VIDEO_ASPECT_RATIO_LANDSCAPE",
         "supports_images": True,
         "min_images": 1,
