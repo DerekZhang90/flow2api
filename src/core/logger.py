@@ -55,6 +55,30 @@ class DebugLogger:
             return token
         return f"{token[:6]}...{token[-6:]}"
 
+    def _truncate_base64(self, data: any, max_length: int = 100) -> any:
+        """Recursively truncate base64 strings in dict/list"""
+        if isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                # 特别处理已知的 base64 字段
+                if key in ('rawImageBytes', 'imageBytes', 'rawBytes', 'base64'):
+                    if isinstance(value, str) and len(value) > max_length:
+                        result[key] = f"{value[:50]}...[{len(value)} chars]...{value[-20:]}"
+                    else:
+                        result[key] = value
+                else:
+                    result[key] = self._truncate_base64(value, max_length)
+            return result
+        elif isinstance(data, list):
+            return [self._truncate_base64(item, max_length) for item in data]
+        elif isinstance(data, str):
+            # 检测可能的 base64 字符串 (长度超过200且只包含base64字符)
+            if len(data) > 200 and data.replace('+', '').replace('/', '').replace('=', '').isalnum():
+                return f"{data[:50]}...[{len(data)} chars]...{data[-20:]}"
+            return data
+        else:
+            return data
+
     def _format_timestamp(self) -> str:
         """Format current timestamp"""
         return datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
@@ -112,7 +136,9 @@ class DebugLogger:
             if body is not None:
                 self.logger.info("\n📦 Request Body:")
                 if isinstance(body, (dict, list)):
-                    body_str = json.dumps(body, indent=2, ensure_ascii=False)
+                    # 截断 base64 数据
+                    truncated_body = self._truncate_base64(body)
+                    body_str = json.dumps(truncated_body, indent=2, ensure_ascii=False)
                     self.logger.info(body_str)
                 else:
                     self.logger.info(str(body))
