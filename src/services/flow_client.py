@@ -282,7 +282,8 @@ class FlowClient:
         prompt: str,
         model_name: str,
         aspect_ratio: str,
-        image_inputs: Optional[List[Dict]] = None
+        image_inputs: Optional[List[Dict]] = None,
+        count: int = 1
     ) -> dict:
         """生成图片(同步返回)
 
@@ -293,6 +294,7 @@ class FlowClient:
             model_name: GEM_PIX, GEM_PIX_2 或 IMAGEN_3_5
             aspect_ratio: 图片宽高比
             image_inputs: 参考图片列表(图生图时使用)
+            count: 生成图片数量 (1-4)
 
         Returns:
             {
@@ -308,20 +310,31 @@ class FlowClient:
         """
         url = f"{self.api_base_url}/projects/{project_id}/flowMedia:batchGenerateImages"
 
-        # 构建请求
-        request_data = {
-            "clientContext": {
-                "sessionId": self._generate_session_id()
-            },
-            "seed": random.randint(1, 99999),
-            "imageModelName": model_name,
-            "imageAspectRatio": aspect_ratio,
-            "prompt": prompt,
-            "imageInputs": image_inputs or []
-        }
+        # 限制生成数量为1-4
+        count = max(1, min(4, count))
+        
+        # 获取session_id (同一批次使用相同的session_id)
+        session_id = self._generate_session_id()
+
+        # 构建多个请求对象
+        requests = []
+        for _ in range(count):
+            request_data = {
+                "clientContext": {
+                    "sessionId": session_id,
+                    "projectId": project_id,
+                    "tool": "PINHOLE"
+                },
+                "seed": random.randint(1, 999999),
+                "imageModelName": model_name,
+                "imageAspectRatio": aspect_ratio,
+                "prompt": prompt,
+                "imageInputs": image_inputs or []
+            }
+            requests.append(request_data)
 
         json_data = {
-            "requests": [request_data]
+            "requests": requests
         }
 
         result = await self._make_request(

@@ -226,7 +226,8 @@ class GenerationHandler:
         model: str,
         prompt: str,
         images: Optional[List[bytes]] = None,
-        stream: bool = False
+        stream: bool = False,
+        count: int = 1
     ) -> AsyncGenerator:
         """统一生成入口
 
@@ -235,6 +236,7 @@ class GenerationHandler:
             prompt: 提示词
             images: 图片列表 (bytes格式)
             stream: 是否流式输出
+            count: 生成图片数量 (1-4, 仅对图片模型有效)
         """
         start_time = time.time()
         token = None
@@ -322,7 +324,7 @@ class GenerationHandler:
             if generation_type == "image":
                 debug_logger.log_info(f"[GENERATION] 开始图片生成流程...")
                 async for chunk in self._handle_image_generation(
-                    token, project_id, model_config, prompt, images, stream
+                    token, project_id, model_config, prompt, images, stream, count
                 ):
                     yield chunk
             else:  # video
@@ -386,9 +388,20 @@ class GenerationHandler:
         model_config: dict,
         prompt: str,
         images: Optional[List[bytes]],
-        stream: bool
+        stream: bool,
+        count: int = 1
     ) -> AsyncGenerator:
-        """处理图片生成 (同步返回)"""
+        """处理图片生成 (同步返回)
+        
+        Args:
+            token: Token对象
+            project_id: 项目ID
+            model_config: 模型配置
+            prompt: 提示词
+            images: 参考图片列表
+            stream: 是否流式输出
+            count: 生成图片数量 (1-4)
+        """
 
         # 获取并发槽位
         if self.concurrency_manager:
@@ -419,7 +432,10 @@ class GenerationHandler:
 
             # 调用生成API
             if stream:
-                yield self._create_stream_chunk("正在生成图片...\n")
+                if count > 1:
+                    yield self._create_stream_chunk(f"正在生成 {count} 张图片...\n")
+                else:
+                    yield self._create_stream_chunk("正在生成图片...\n")
 
             result = await self.flow_client.generate_image(
                 at=token.at,
@@ -427,7 +443,8 @@ class GenerationHandler:
                 prompt=prompt,
                 model_name=model_config["model_name"],
                 aspect_ratio=model_config["aspect_ratio"],
-                image_inputs=image_inputs
+                image_inputs=image_inputs,
+                count=count
             )
 
             # 提取URL
@@ -436,37 +453,52 @@ class GenerationHandler:
                 yield self._create_error_response("生成结果为空")
                 return
 
-            image_url = media[0]["image"]["generatedImage"]["fifeUrl"]
-
-            # 缓存图片 (如果启用)
-            local_url = image_url
-            if config.cache_enabled:
+            # 处理所有生成的图片
+            local_urls = []
+            for idx, media_item in enumerate(media):
                 try:
-                    if stream:
-                        yield self._create_stream_chunk("缓存图片中...\n")
-                    cached_filename = await self.file_cache.download_and_cache(image_url, "image")
-                    local_url = f"{self._get_base_url()}/tmp/{cached_filename}"
-                    if stream:
-                        yield self._create_stream_chunk("✅ 图片缓存成功,准备返回缓存地址...\n")
-                except Exception as e:
-                    debug_logger.log_error(f"Failed to cache image: {str(e)}")
-                    # 缓存失败不影响结果返回,使用原始URL
+                    image_url = media_item["image"]["generatedImage"]["fifeUrl"]
+                    
+                    # 缓存图片 (如果启用)
                     local_url = image_url
-                    if stream:
-                        yield self._create_stream_chunk(f"⚠️ 缓存失败: {str(e)}\n正在返回源链接...\n")
-            else:
-                if stream:
+                    if config.cache_enabled:
+                        try:
+                            if stream and idx == 0:
+                                yield self._create_stream_chunk(f"缓存 {len(media)} 张图片中...\n")
+                            cached_filename = await self.file_cache.download_and_cache(image_url, "image")
+                            local_url = f"{self._get_base_url()}/tmp/{cached_filename}"
+                        except Exception as e:
+                            debug_logger.log_error(f"Failed to cache image {idx + 1}: {str(e)}")
+                            # 缓存失败不影响结果返回,使用原始URL
+                            local_url = image_url
+                    
+                    local_urls.append(local_url)
+                except (KeyError, IndexError) as e:
+                    debug_logger.log_error(f"Failed to extract image URL {idx + 1}: {str(e)}")
+                    continue
+
+            if not local_urls:
+                yield self._create_error_response("无法提取图片URL")
+                return
+
+            # 缓存状态反馈
+            if stream:
+                if config.cache_enabled:
+                    yield self._create_stream_chunk(f"✅ {len(local_urls)} 张图片处理完成\n")
+                else:
                     yield self._create_stream_chunk("缓存已关闭,正在返回源链接...\n")
 
             # 返回结果
             if stream:
+                # 流式输出：返回所有图片的markdown
+                image_markdown = "\n\n".join([f"![Generated Image {i+1}]({url})" for i, url in enumerate(local_urls)])
                 yield self._create_stream_chunk(
-                    f"![Generated Image]({local_url})",
+                    image_markdown,
                     finish_reason="stop"
                 )
             else:
                 yield self._create_completion_response(
-                    local_url,  # 直接传URL,让方法内部格式化
+                    local_urls,  # 传递URL列表
                     media_type="image"
                 )
 
@@ -785,11 +817,11 @@ class GenerationHandler:
 
         return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
-    def _create_completion_response(self, content: str, media_type: str = "image", is_availability_check: bool = False) -> str:
+    def _create_completion_response(self, content, media_type: str = "image", is_availability_check: bool = False) -> str:
         """创建非流式响应
 
         Args:
-            content: 媒体URL或纯文本消息
+            content: 媒体URL、URL列表或纯文本消息
             media_type: 媒体类型 ("image" 或 "video")
             is_availability_check: 是否为可用性检查响应 (纯文本消息)
 
@@ -807,7 +839,11 @@ class GenerationHandler:
             if media_type == "video":
                 formatted_content = f"```html\n<video src='{content}' controls></video>\n```"
             else:  # image
-                formatted_content = f"![Generated Image]({content})"
+                # 支持URL列表 (多图生成)
+                if isinstance(content, list):
+                    formatted_content = "\n\n".join([f"![Generated Image {i+1}]({url})" for i, url in enumerate(content)])
+                else:
+                    formatted_content = f"![Generated Image]({content})"
 
         response = {
             "id": f"chatcmpl-{int(time.time())}",

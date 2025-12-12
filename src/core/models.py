@@ -152,6 +152,7 @@ class ChatCompletionRequest(BaseModel):
     model: str
     messages: List[ChatMessage]
     stream: bool = False
+    n: int = 1  # Number of images to generate (1-4, only for image models)
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     # Flow2API specific parameters
